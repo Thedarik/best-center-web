@@ -423,7 +423,7 @@ export function DesignaliCreative() {
                 <p className="text-xs text-muted-foreground">Creative Suite Pro</p>
               </div>
             </div>
-            
+
             {/* Time display */}
             <div className="text-xs text-muted-foreground mb-3">
               {currentTime.toLocaleTimeString()} • {currentTime.toLocaleDateString()}
@@ -431,9 +431,9 @@ export function DesignaliCreative() {
 
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input 
-                type="search" 
-                placeholder="Search everything..." 
+              <Input
+                type="search"
+                placeholder="Search everything..."
                 className="w-full rounded-2xl bg-muted/50 pl-9 pr-4 py-2"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -449,8 +449,8 @@ export function DesignaliCreative() {
                   <button
                     className={cn(
                       "flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-medium transition-all duration-200",
-                      item.isActive 
-                        ? "bg-primary text-primary-foreground shadow-md" 
+                      item.isActive
+                        ? "bg-primary text-primary-foreground shadow-md"
                         : "hover:bg-muted/70 hover:scale-[1.02]",
                     )}
                     onClick={() => item.items && toggleExpanded(item.title)}
@@ -493,11 +493,11 @@ export function DesignaliCreative() {
                               className="flex items-center justify-between rounded-xl px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
                             >
                               {subItem.title}
-                              {subItem.badge && (
+                              {/* {subItem.badge && (
                                 <Badge variant="outline" className="rounded-full px-2 py-0.5 text-xs">
                                   {subItem.badge}
                                 </Badge>
-                              )}
+                              )} */}
                             </a>
                           ))}
                         </div>
@@ -516,7 +516,7 @@ export function DesignaliCreative() {
                 <Settings className="h-5 w-5" />
                 <span>Settings</span>
               </Button>
-              
+
               {/* User Profile */}
               <div className="flex items-center justify-between rounded-2xl bg-muted/50 p-3">
                 <div className="flex items-center gap-3">
@@ -548,7 +548,7 @@ export function DesignaliCreative() {
           <Button variant="ghost" size="icon" className="hidden md:flex" onClick={() => setSidebarOpen(!sidebarOpen)}>
             <PanelLeft className="h-5 w-5" />
           </Button>
-          
+
           <div className="flex flex-1 items-center justify-between">
             <div>
               <h1 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
@@ -556,7 +556,7 @@ export function DesignaliCreative() {
               </h1>
               <p className="text-sm text-muted-foreground">Welcome back, John!</p>
             </div>
-            
+
             {/* Enhanced header actions */}
             <div className="flex items-center gap-2">
               <TooltipProvider>
@@ -658,18 +658,18 @@ export function DesignaliCreative() {
                 </div>
                 <div className="hidden lg:block">
                   <motion.div
-                    animate={{ 
+                    animate={{
                       rotate: 360,
                       scale: [1, 1.1, 1]
                     }}
-                    transition={{ 
+                    transition={{
                       rotate: { duration: 50, repeat: Number.POSITIVE_INFINITY, ease: "linear" },
                       scale: { duration: 4, repeat: Number.POSITIVE_INFINITY, ease: "easeInOut" }
                     }}
                     className="relative h-40 w-40"
                   >
                     {[...Array(5)].map((_, i) => (
-                      <div 
+                      <div
                         key={i}
                         className={`absolute rounded-full bg-white/10 backdrop-blur-md`}
                         style={{
@@ -682,7 +682,7 @@ export function DesignaliCreative() {
                 </div>
               </div>
             </div>
-            
+
             {/* Background decoration */}
             <div className="absolute top-0 right-0 w-1/2 h-full opacity-10">
               <div className="grid grid-cols-8 gap-2 h-full w-full p-4">
@@ -691,10 +691,10 @@ export function DesignaliCreative() {
                     key={i}
                     className="bg-white rounded"
                     animate={{ opacity: [0.3, 0.8, 0.3] }}
-                    transition={{ 
-                      duration: 2, 
-                      repeat: Number.POSITIVE_INFINITY, 
-                      delay: i * 0.1 
+                    transition={{
+                      duration: 2,
+                      repeat: Number.POSITIVE_INFINITY,
+                      delay: i * 0.1
                     }}
                   />
                 ))}
@@ -760,8 +760,8 @@ export function DesignaliCreative() {
                       >
                         <div className="relative">
                           <div className="h-12 w-12 rounded-xl bg-muted overflow-hidden">
-                            <img 
-                              src={file.thumbnail} 
+                            <img
+                              src={file.thumbnail}
                               alt={file.name}
                               className="h-full w-full object-cover"
                             />
@@ -770,12 +770,12 @@ export function DesignaliCreative() {
                             {file.icon}
                           </div>
                         </div>
-                        
+
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <p className="font-medium truncate">{file.name}</p>
-                            <Badge 
-                              variant={file.status === "Active" ? "default" : file.status === "Review" ? "secondary" : "outline"} 
+                            <Badge
+                              variant={file.status === "Active" ? "default" : file.status === "Review" ? "secondary" : "outline"}
                               className="rounded-xl text-xs"
                             >
                               {file.status}
@@ -789,7 +789,7 @@ export function DesignaliCreative() {
                             <span>{file.size}</span>
                           </div>
                         </div>
-                        
+
                         <div className="flex items-center gap-2">
                           {file.shared && (
                             <div className="flex items-center gap-1">
@@ -939,7 +939,7 @@ export function DesignaliCreative() {
                       </CardHeader>
                       <CardContent className="pb-2">
                         <CardDescription className="mb-3">{app.description}</CardDescription>
-                        
+
                         <div className="flex items-center justify-between text-xs text-muted-foreground mb-3">
                           <div className="flex items-center gap-1">
                             <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
@@ -960,8 +960,8 @@ export function DesignaliCreative() {
                         )}
                       </CardContent>
                       <CardFooter className="flex gap-2">
-                        <Button 
-                          variant={app.progress < 100 ? "secondary" : "default"} 
+                        <Button
+                          variant={app.progress < 100 ? "secondary" : "default"}
                           className="flex-1 rounded-2xl"
                         >
                           {app.progress < 100 ? (
