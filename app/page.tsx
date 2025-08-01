@@ -1,8 +1,10 @@
+
 "use client"
 
 import { useState, useEffect } from "react"
-import { CertificateDashboard } from "@/components/superadmin/super_admin_page" 
-import { AdminDashboard } from "@/components/admin/admin"
+import { CertificateDashboard } from "@/components/superadmin/super_admin_page"
+// `IELTSDashboard` ni to‘g‘ri import qilamiz (avvalgi javobdagi fayl)
+import IELTSDashboard from "@/components/src/IELTSDashboard"
 import { LoginPage } from "@/components/login"
 
 type UserType = 'admin' | 'superadmin' | null
@@ -64,7 +66,7 @@ export default function Home() {
 
       {/* Admin Dashboard (oddiy admin) */}
       {userType === 'admin' && (
-        <AdminDashboard onLogout={handleLogout} />
+        <IELTSDashboard onLogout={handleLogout} />
       )}
       
       {/* Certificate Dashboard (super admin) */}
