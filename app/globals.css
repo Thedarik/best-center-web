@@ -93,6 +93,42 @@ body {
   }
 }
 
+/* IELTS specific colors */
+.text-ielts-dark {
+  color: #1a1a1a;
+}
+
+/* Gap-filling input styles */
+.gap-input {
+  @apply inline-block w-24 h-8 px-2 py-1 text-center text-sm font-medium border-2 border-ielts-red rounded-md bg-white text-ielts-dark placeholder-ielts-text;
+  @apply focus:outline-none focus:ring-2 focus:ring-ielts-red focus:ring-opacity-50;
+  @apply transition-all duration-200;
+}
+
+.gap-input:focus {
+  @apply border-ielts-red shadow-md;
+}
+
+.gap-input::placeholder {
+  @apply text-ielts-text opacity-70;
+}
+
+.text-ielts-red {
+  color: #dc2626;
+}
+
+.text-ielts-text {
+  color: #374151;
+}
+
+.bg-ielts-red {
+  background-color: #dc2626;
+}
+
+.border-ielts-red {
+  border-color: #dc2626;
+}
+
 
 
 /* Custom animations */

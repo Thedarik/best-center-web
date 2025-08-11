@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect } from "react"
@@ -31,7 +30,7 @@ import {
   Pause,
   SkipBack,
   SkipForward,
-  FileText,
+  List
 } from "lucide-react"
 
 // Import Local API va components
@@ -40,23 +39,15 @@ import {
   type ListeningTestResponse,
   type CreateListeningTestRequest,
   type ListeningTestStats,
-} from "./listeningLocalAPI"
-import CreateListeningTestNew from "./CreateListeningTestNew"
-import CreateGapFillingTest from "./CreateGapFillingTest"
-import IELTSListeningTest from "./IELTSListeningTest"
-import QuestionCard from "./QuestionCard"
+} from "@/components/src/ielts_file/listining_file/listeningLocalAPI"
+import { useRouter } from "next/navigation"
 
-export default function ListeningWithBackend() {
+export default function ListeningPage() {
+  const router = useRouter()
+  
   // State management
   const [tests, setTests] = useState<ListeningTestResponse[]>([])
   const [loading, setLoading] = useState(true)
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [isCreateGapFillingOpen, setIsCreateGapFillingOpen] = useState(false)
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [editingTest, setEditingTest] = useState<ListeningTestResponse | null>(null)
-  const [selectedTest, setSelectedTest] = useState<ListeningTestResponse | null>(null)
-  const [viewMode, setViewMode] = useState<"list" | "viewer">("list")
-  const [testViewerMode, setTestViewerMode] = useState<"preview" | "practice" | "exam">("preview")
   const [filterType, setFilterType] = useState("all")
   const [filterStatus, setFilterStatus] = useState("all")
   const [apiError, setApiError] = useState<string | null>(null)
@@ -95,155 +86,67 @@ export default function ListeningWithBackend() {
     loadData()
   }, [])
 
-  // Handle test creation
-  const handleTestCreate = async (testData: any) => {
-    try {
-      const response = await listeningTestAPI.createTest(testData)
-      await loadData()
-      setIsCreateDialogOpen(false)
-    } catch (error) {
-      console.error("Test yaratishda xatolik:", error)
-      alert("Test yaratishda xatolik yuz berdi!")
-    }
+  const handleCreateTest = () => {
+    router.push("/listening/create-test")
   }
 
-  // Handle gap-filling test creation
-  const handleGapFillingTestCreate = async (testData: any) => {
-    try {
-      const response = await listeningTestAPI.createTest(testData)
-      await loadData()
-      setIsCreateGapFillingOpen(false)
-    } catch (error) {
-      console.error("Gap-filling test yaratishda xatolik:", error)
-      alert("Gap-filling test yaratishda xatolik yuz berdi!")
-    }
-  }
-
-  // Handle test editing
   const handleEditTest = (test: ListeningTestResponse) => {
-    setEditingTest(test)
-    setIsEditDialogOpen(true)
+    router.push(`/listening/edit-test/${test.id}`)
   }
 
-  // Handle test update
-  const handleTestUpdate = async (testData: any) => {
-    if (!editingTest) return
-
-    try {
-      const response = await listeningTestAPI.updateTest(editingTest.id, testData)
-      await loadData()
-      setIsEditDialogOpen(false)
-      setEditingTest(null)
-    } catch (error) {
-      console.error("Test yangilashda xatolik:", error)
-      alert("Test yangilashda xatolik yuz berdi!")
-    }
+  const handleViewTest = (test: ListeningTestResponse, mode: "preview" | "practice" | "exam" = "preview") => {
+    router.push(`/listening/test/${test.id}?mode=${mode}`)
   }
 
-  // Delete test
   const deleteTest = async (id: string) => {
-    if (!confirm("Bu testni o'chirishni xohlaysizmi?")) return
-
-    try {
-      await listeningTestAPI.deleteTest(id)
-      await loadData()
-    } catch (error) {
-      console.error("Test o'chirishda xatolik:", error)
-      alert("Test o'chirishda xatolik yuz berdi!")
+    if (confirm("Bu testni o'chirishni xohlaysizmi?")) {
+      try {
+        await listeningTestAPI.deleteTest(id)
+        await loadData()
+      } catch (error) {
+        console.error("Testni o'chirishda xatolik:", error)
+      }
     }
   }
 
-  // Toggle test status
   const toggleStatus = async (id: string) => {
     try {
       const test = tests.find(t => t.id === id)
-      if (!test) return
-
-      const newStatus = test.status === "Active" ? "Draft" : "Active"
-      await listeningTestAPI.updateTest(id, { ...test, status: newStatus } as any)
-      await loadData()
+      if (test) {
+        const newStatus = test.status === "Active" ? "Draft" : "Active"
+        await listeningTestAPI.updateTest(id, { status: newStatus })
+        await loadData()
+      }
     } catch (error) {
-      console.error("Status o'zgartirishda xatolik:", error)
-      alert("Status o'zgartirishda xatolik yuz berdi!")
+      console.error("Statusni o'zgartirishda xatolik:", error)
     }
   }
 
-  // Handle view test
-  const handleViewTest = (test: ListeningTestResponse, mode: "preview" | "practice" | "exam" = "preview") => {
-    setSelectedTest(test)
-    setTestViewerMode(mode)
-    setViewMode("viewer")
-  }
-
-  // Back to list
-  const handleBackToList = () => {
-    setViewMode("list")
-    setSelectedTest(null)
-  }
-
-  // Retry connection
   const retryConnection = async () => {
-    setLoading(true)
+    await checkConnection()
     await loadData()
   }
-
-      const filteredTests = tests.filter((test) => {
-      const typeMatch = filterType === "all" || test.type === filterType
-      const statusMatch = filterStatus === "all" || test.status === filterStatus
-      return typeMatch && statusMatch
-    })
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Active":
-        return "bg-green-100 text-green-800"
+        return "bg-green-100 text-green-800 border-green-200"
       case "Draft":
-        return "bg-yellow-100 text-yellow-800"
+        return "bg-yellow-100 text-yellow-800 border-yellow-200"
       default:
-        return "bg-gray-100 text-gray-800"
+        return "bg-gray-100 text-gray-800 border-gray-200"
     }
   }
 
   const getTypeColor = (type: string) => {
-    return type === "Academic" ? "bg-blue-100 text-blue-800" : "bg-purple-100 text-purple-800"
-  }
-
-  // Show test viewer if selected
-  if (viewMode === "viewer" && selectedTest) {
-    // Test gap-filling type bo'lsa QuestionCard komponentini ko'rsatamiz
-    if (selectedTest.type === "gap-filling") {
-      const sampleQuestion = {
-        id: 1,
-        type: 'gap-filling' as const,
-        question: selectedTest.title || "Gap-Filling Test",
-        correctAnswer: "",
-        gapText: (selectedTest.sections as any)?.[0]?.content || "Sample text with [1] and [2] gaps",
-        gapNumbers: [1, 2]
-      };
-      
-      return (
-        <div className="space-y-6">
-          <div className="flex items-center gap-4">
-            <Button variant="outline" onClick={handleBackToList}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Orqaga
-            </Button>
-            <h2 className="text-2xl font-bold">{selectedTest.title}</h2>
-          </div>
-          
-          <QuestionCard
-            question={sampleQuestion}
-            selectedAnswer=""
-            onAnswerChange={(answer) => console.log("Answer changed:", answer)}
-            questionNumber={1}
-            totalQuestions={1}
-            allAnswers={{}}
-          />
-        </div>
-      );
+    switch (type) {
+      case "Academic":
+        return "bg-blue-100 text-blue-800 border-blue-200"
+      case "General Training":
+        return "bg-purple-100 text-purple-800 border-purple-200"
+      default:
+        return "bg-gray-100 text-gray-800 border-gray-200"
     }
-    
-    return <IELTSListeningTest testData={selectedTest} onBack={handleBackToList} mode={testViewerMode} />
   }
 
   if (loading) {
@@ -251,7 +154,7 @@ export default function ListeningWithBackend() {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Backend bilan bog'lanmoqda...</p>
+          <p className="text-muted-foreground">Ma'lumotlar yuklanmoqda...</p>
         </div>
       </div>
     )
@@ -273,6 +176,7 @@ export default function ListeningWithBackend() {
         </Alert>
       )}
 
+      {/* Header Section */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2">
@@ -290,13 +194,14 @@ export default function ListeningWithBackend() {
               </Badge>
             ) : (
               <Badge variant="outline" className="text-yellow-600 border-yellow-600">
-                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                <Loader2 className="h-3 w-3 animate-spin" />
                 Checking...
               </Badge>
             )}
           </h2>
           <p className="text-muted-foreground">IELTS Listening bo'limiga oid testlar va ma'lumotlar</p>
         </div>
+        
         <div className="flex gap-2">
           <Select value={filterType} onValueChange={setFilterType}>
             <SelectTrigger className="w-[140px] rounded-2xl">
@@ -320,17 +225,9 @@ export default function ListeningWithBackend() {
               <SelectItem value="Draft">Draft</SelectItem>
             </SelectContent>
           </Select>
-          <Button className="rounded-2xl" onClick={() => setIsCreateDialogOpen(true)}>
+          <Button className="rounded-2xl" onClick={handleCreateTest}>
             <Plus className="mr-2 h-4 w-4" />
             Yangi Listening Test
-          </Button>
-          <Button 
-            variant="outline" 
-            className="rounded-2xl" 
-            onClick={() => setIsCreateGapFillingOpen(true)}
-          >
-            <FileText className="mr-2 h-4 w-4" />
-            Gap-Filling Test
           </Button>
         </div>
       </div>
@@ -375,7 +272,7 @@ export default function ListeningWithBackend() {
               </div>
               <div>
                 <p className="text-2xl font-bold">
-                  {tests.reduce((total, test) => total + (test.attempts || 0), 0)}
+                  {tests.reduce((total, test) => total + test.attempts, 0)}
                 </p>
                 <p className="text-sm text-muted-foreground">Jami Urinishlar</p>
               </div>
@@ -392,7 +289,7 @@ export default function ListeningWithBackend() {
               <div>
                 <p className="text-2xl font-bold">
                   {tests.length > 0 
-                    ? Math.round(tests.reduce((total, test) => total + (test.avgScore || 0), 0) / tests.length)
+                    ? Math.round(tests.reduce((total, test) => total + test.avgScore, 0) / tests.length)
                     : 0}%
                 </p>
                 <p className="text-sm text-muted-foreground">O'rtacha Ball</p>
@@ -403,33 +300,31 @@ export default function ListeningWithBackend() {
       </div>
 
       {/* Tests List */}
-      <Card className="rounded-3xl border-2">
+      <Card className="rounded-2xl border-2">
         <CardHeader>
-          <CardTitle>Listening Testlar Ro'yxati</CardTitle>
-          <CardDescription>IELTS Listening testlari va ularning statistikasi</CardDescription>
+          <CardTitle className="flex items-center gap-2">
+            <List className="h-5 w-5" />
+            Testlar Ro'yxati
+          </CardTitle>
+          <CardDescription>
+            Barcha IELTS Listening testlari va ularning ma'lumotlari
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {filteredTests.length === 0 ? (
+          {tests.length === 0 ? (
             <div className="text-center py-12">
-              <Headphones className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-600 mb-2">Testlar topilmadi</h3>
-              <p className="text-muted-foreground mb-4">
-                {filterType !== "all" || filterStatus !== "all" 
-                  ? "Tanlangan filtrlarda testlar yo'q" 
-                  : "Hozircha Listening testlari mavjud emas"}
-              </p>
-              <Button onClick={() => setIsCreateDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
+              <Headphones className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Hali testlar yaratilmagan</h3>
+              <p className="text-gray-600 mb-4">Birinchi listening testini yarating va o'quvchilar uchun tayyorlang</p>
+              <Button onClick={handleCreateTest}>
+                <Plus className="h-4 w-4 mr-2" />
                 Birinchi Testni Yaratish
               </Button>
             </div>
           ) : (
             <div className="space-y-4">
-              {filteredTests.map((test) => (
-                <div
-                  key={test.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-                >
+              {tests.map((test) => (
+                <div key={test.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
                       <Headphones className="h-6 w-6 text-blue-600" />
@@ -437,11 +332,20 @@ export default function ListeningWithBackend() {
                     <div>
                       <h3 className="font-semibold text-lg">{test.title}</h3>
                       <div className="flex items-center gap-2 mt-1">
-                        <Badge className={getTypeColor(test.type)}>{test.type}</Badge>
-                        <Badge className={getStatusColor(test.status)}>{test.status}</Badge>
-                        <span className="text-sm text-muted-foreground">
+                        <Badge variant="outline" className={getTypeColor(test.type)}>
+                          {test.type}
+                        </Badge>
+                        <Badge variant="outline" className={getStatusColor(test.status)}>
+                          {test.status}
+                        </Badge>
+                        <span className="text-sm text-gray-500">
                           {test.sections} bo'lim • {test.questions} savol
                         </span>
+                      </div>
+                      <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
+                        <span>Daraja: {test.level}</span>
+                        <span>Vaqt: {test.timeLimit} daq</span>
+                        <span>Yaratilgan: {new Date(test.createdAt).toLocaleDateString('uz-UZ')}</span>
                       </div>
                     </div>
                   </div>
@@ -510,32 +414,6 @@ export default function ListeningWithBackend() {
           )}
         </CardContent>
       </Card>
-
-      {/* Create Test Dialog */}
-      <CreateListeningTestNew
-        isOpen={isCreateDialogOpen}
-        onOpenChange={setIsCreateDialogOpen}
-        onTestCreate={handleTestCreate}
-      />
-
-      {/* Create Gap-Filling Test Dialog */}
-      <CreateGapFillingTest
-        isOpen={isCreateGapFillingOpen}
-        onOpenChange={setIsCreateGapFillingOpen}
-        onTestCreate={handleGapFillingTestCreate}
-        onCancel={() => setIsCreateGapFillingOpen(false)}
-      />
-
-      {/* Edit Test Dialog */}
-      {editingTest && (
-        <CreateListeningTestNew
-          isOpen={isEditDialogOpen}
-          onOpenChange={setIsEditDialogOpen}
-          onTestCreate={handleTestUpdate}
-          editingTest={editingTest}
-          mode="edit"
-        />
-      )}
     </div>
   )
 }

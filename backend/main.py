@@ -31,10 +31,17 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS middleware
+# CORS middleware - yaxshilangan
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=[
+        "http://localhost:3000", 
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "http://192.168.1.101:3000",  # Network access
+        "http://192.168.1.101:3001"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -53,7 +60,12 @@ async def root():
         "message": "IELTS Test Management API",
         "version": "1.0.0",
         "status": "running",
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
+        "endpoints": {
+            "health": "/api/health",
+            "docs": "/docs",
+            "redoc": "/redoc"
+        }
     }
 
 @app.get("/api/health")
@@ -62,7 +74,15 @@ async def health_check():
         "status": "healthy",
         "message": "IELTS Test API is running",
         "timestamp": datetime.now().isoformat(),
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "database": "connected",
+        "endpoints": {
+            "listening_tests": "/api/listening-tests",
+            "reading_tests": "/api/reading-tests", 
+            "writing_tests": "/api/writing-tests",
+            "auth": "/api/auth",
+            "users": "/api/users"
+        }
     }
 
 @app.get("/api/debug")

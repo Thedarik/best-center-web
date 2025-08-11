@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { studentExamAPI, StudentTest } from "@/components/src/ielts_file/studentExamAPI"
 import {
   Headphones,
   BookOpen,
@@ -40,6 +41,10 @@ import {
   SkipBack,
   SkipForward,
   Headphones as HeadphonesIcon,
+  Database,
+  Wifi,
+  WifiOff,
+  XCircle,
 } from "lucide-react"
 
 // Types
@@ -66,6 +71,9 @@ interface Question {
   sentence?: string
   startTime?: number
   endTime?: number
+  instructions?: string
+  questionTitle?: string
+  notesText?: string
 }
 
 export default function StudentExamPage() {
@@ -86,6 +94,11 @@ export default function StudentExamPage() {
   const [passportId, setPassportId] = useState("")
   const [studentName, setStudentName] = useState("")
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+
+  // Backend connection state
+  const [backendConnected, setBackendConnected] = useState(false)
+  const [availableTests, setAvailableTests] = useState<StudentTest[]>([])
+  const [loadingTests, setLoadingTests] = useState(false)
 
   // Audio controls for listening
   const [isPlaying, setIsPlaying] = useState(false)
@@ -193,7 +206,7 @@ export default function StudentExamPage() {
     localStorage.setItem("studentName", studentName)
   }
 
-  // Check if user is already authenticated
+  // Check if user is already authenticated and load tests
   useEffect(() => {
     const savedPassportId = localStorage.getItem("studentPassportId")
     const savedStudentName = localStorage.getItem("studentName")
@@ -204,6 +217,28 @@ export default function StudentExamPage() {
       setIsAuthenticated(true)
       setShowPassportModal(false)
     }
+
+    // Check backend connection and load tests
+    const checkBackendAndLoadTests = async () => {
+      try {
+        setLoadingTests(true)
+        const isConnected = await studentExamAPI.testConnection()
+        setBackendConnected(isConnected)
+        
+        if (isConnected) {
+          const tests = await studentExamAPI.getAvailableTests()
+          setAvailableTests(tests)
+          console.log("✅ Tests loaded:", tests.length)
+        }
+      } catch (error) {
+        console.error("❌ Error loading tests:", error)
+        setBackendConnected(false)
+      } finally {
+        setLoadingTests(false)
+      }
+    }
+
+    checkBackendAndLoadTests()
   }, [])
 
   // Format time
@@ -235,7 +270,7 @@ export default function StudentExamPage() {
   }
 
   // Start exam
-  const startExam = (section: ExamSection) => {
+  const startExam = async (section: ExamSection) => {
     setSelectedSection(section)
     setTimeLeft(section.duration * 60)
     setIsRunning(true)
@@ -252,15 +287,50 @@ export default function StudentExamPage() {
     }
     
     setLoading(true)
-    setTimeout(() => {
-      setExamData({
-        id: `exam-${Date.now()}`,
-        section: section.id,
-        questions: generateMockQuestions(section.id),
-        startTime: new Date().toISOString()
-      })
-      setLoading(false)
-    }, 1000)
+    
+    try {
+      // Try to get test from backend first
+      if (backendConnected && availableTests.length > 0) {
+        const testForSection = availableTests.find(test => test.type === section.id)
+        if (testForSection) {
+          const testData = await studentExamAPI.getTestById(testForSection.id, section.id)
+          if (testData) {
+            setExamData({
+              id: testData.id,
+              section: section.id,
+              questions: testData.questions,
+              startTime: new Date().toISOString(),
+              testData: testData
+            })
+            setLoading(false)
+            return
+          }
+        }
+      }
+      
+      // Fallback to mock data if no backend test available
+      setTimeout(() => {
+        setExamData({
+          id: `exam-${Date.now()}`,
+          section: section.id,
+          questions: generateMockQuestions(section.id),
+          startTime: new Date().toISOString()
+        })
+        setLoading(false)
+      }, 1000)
+    } catch (error) {
+      console.error("❌ Error loading test:", error)
+      // Fallback to mock data
+      setTimeout(() => {
+        setExamData({
+          id: `exam-${Date.now()}`,
+          section: section.id,
+          questions: generateMockQuestions(section.id),
+          startTime: new Date().toISOString()
+        })
+        setLoading(false)
+      }, 1000)
+    }
   }
 
   // Generate mock questions based on section
@@ -281,7 +351,25 @@ export default function StudentExamPage() {
           }
           
           if (questionType === "Sentence Completion") {
-            question.question = `Durbek ___ my brother ${i}`
+            // Yangi format uchun mock data
+            question.questionTitle = "The Dead Sea Scrolls"
+            question.instructions = "Complete the notes below. Choose ONE WORD ONLY from the passage for each answer. Write your answers in boxes 1-5 on your answer sheet."
+            question.notesText = `Discovery:
+• Qumran, 1945/7
+• three Bedouin shepherds in their teens were near an opening on side of cliff
+• heard a noise of breaking when one teenager threw a [1]
+• teenagers went into the [2] and found a number of containers made of [3]
+
+The scrolls:
+• date from between 150 BCE and 70 CE
+• thought to have been written by group of people known as the [4]
+• written mainly in the [5] language
+• most are on religious topics, written using ink on parchment or papyrus`
+            question.gap1 = "stone"
+            question.gap2 = "cave"
+            question.gap3 = "clay"
+            question.gap4 = "Essenes"
+            question.gap5 = "Hebrew"
           }
           
           questions.push(question)
@@ -300,7 +388,19 @@ export default function StudentExamPage() {
           }
           
           if (questionType === "Sentence Completion") {
-            question.question = `The climate change is affecting _____ around the world ${i}`
+            question.questionTitle = "Climate Change Effects"
+            question.instructions = "Complete the sentences below. Choose NO MORE THAN TWO WORDS from the passage for each answer."
+            question.notesText = `Global Impact:
+• The climate change is affecting [1] around the world
+• Scientists predict [2] will increase by 2°C by 2050
+• Many species are [3] due to habitat loss
+• Governments are implementing [4] to reduce emissions
+• Renewable energy sources like [5] are becoming more popular`
+            question.gap1 = "ecosystems"
+            question.gap2 = "temperatures"
+            question.gap3 = "endangered"
+            question.gap4 = "policies"
+            question.gap5 = "solar"
           }
           
           questions.push(question)
@@ -364,45 +464,119 @@ export default function StudentExamPage() {
   }
 
   // Handle ready confirmation for listening
-  const handleReadyConfirm = () => {
+  const handleReadyConfirm = async () => {
     setShowReadyModal(false)
     
     setLoading(true)
-    setTimeout(() => {
-      setExamData({
-        id: `exam-${Date.now()}`,
-        section: selectedSection?.id || "listening",
-        questions: generateMockQuestions(selectedSection?.id || "listening"),
-        startTime: new Date().toISOString()
-      })
-      setLoading(false)
-      
-      // Auto-start audio after a short delay
-      setTimeout(() => {
-        if (audioRef.current) {
-          audioRef.current.play()
+    
+    try {
+      // Try to get test from backend first
+      if (backendConnected && availableTests.length > 0) {
+        const testForSection = availableTests.find(test => test.type === "listening")
+        if (testForSection) {
+          const testData = await studentExamAPI.getTestById(testForSection.id, "listening")
+          if (testData) {
+            setExamData({
+              id: testData.id,
+              section: "listening",
+              questions: testData.questions,
+              startTime: new Date().toISOString(),
+              testData: testData
+            })
+            setLoading(false)
+            
+            // Auto-start audio after a short delay
+            setTimeout(() => {
+              if (audioRef.current) {
+                audioRef.current.play()
+              }
+            }, 500)
+            return
+          }
         }
-      }, 500)
-    }, 1000)
+      }
+      
+      // Fallback to mock data
+      setTimeout(() => {
+        setExamData({
+          id: `exam-${Date.now()}`,
+          section: selectedSection?.id || "listening",
+          questions: generateMockQuestions(selectedSection?.id || "listening"),
+          startTime: new Date().toISOString()
+        })
+        setLoading(false)
+        
+        // Auto-start audio after a short delay
+        setTimeout(() => {
+          if (audioRef.current) {
+            audioRef.current.play()
+          }
+        }, 500)
+      }, 1000)
+    } catch (error) {
+      console.error("❌ Error loading listening test:", error)
+      // Fallback to mock data
+      setTimeout(() => {
+        setExamData({
+          id: `exam-${Date.now()}`,
+          section: selectedSection?.id || "listening",
+          questions: generateMockQuestions(selectedSection?.id || "listening"),
+          startTime: new Date().toISOString()
+        })
+        setLoading(false)
+        
+        // Auto-start audio after a short delay
+        setTimeout(() => {
+          if (audioRef.current) {
+            audioRef.current.play()
+          }
+        }, 500)
+      }, 1000)
+    }
   }
 
   // Submit exam
-  const handleSubmitExam = () => {
+  const handleSubmitExam = async () => {
     setIsRunning(false)
     setShowResults(true)
     
     const score = calculateScore()
+    const timeSpent = (selectedSection?.duration || 0) * 60 - timeLeft
     const results = {
       section: selectedSection?.id,
       score,
       totalQuestions: examData?.questions?.length || 0,
       correctAnswers: Math.round((score / 100) * (examData?.questions?.length || 0)),
-      timeSpent: (selectedSection?.duration || 0) * 60 - timeLeft,
+      timeSpent,
       completedAt: new Date().toISOString()
     }
     
     setExamResults(results)
     setCurrentView("results")
+
+    // Submit to backend if connected and we have test data
+    if (backendConnected && examData?.testData) {
+      try {
+        const success = await studentExamAPI.submitTestAttempt({
+          testId: examData.testData.id,
+          testType: selectedSection?.id || "",
+          studentId: passportId,
+          studentName: studentName,
+          score,
+          timeSpent,
+          answers,
+          completedAt: new Date().toISOString()
+        })
+        
+        if (success) {
+          console.log("✅ Test attempt submitted to backend")
+        } else {
+          console.warn("⚠️ Failed to submit test attempt to backend")
+        }
+      } catch (error) {
+        console.error("❌ Error submitting test attempt:", error)
+      }
+    }
   }
 
   // Calculate score
@@ -410,16 +584,34 @@ export default function StudentExamPage() {
     if (!examData?.questions) return 0
     
     let correctAnswers = 0
-    const totalQuestions = examData.questions.length
+    let totalPossibleAnswers = 0
     
     examData.questions.forEach((question: any) => {
-      const userAnswer = answers[question.id]
-      if (userAnswer && userAnswer === question.correctAnswer) {
-        correctAnswers++
+      if (question.type === "Sentence Completion") {
+        // Sentence Completion uchun har bir gap alohida hisoblanadi
+        for (let gapNumber = 1; gapNumber <= 5; gapNumber++) {
+          const gapKey = `${question.id}_gap${gapNumber}`
+          const userAnswer = answers[gapKey]
+          const correctAnswer = question[`gap${gapNumber}`]
+          
+          if (correctAnswer) {
+            totalPossibleAnswers++
+            if (userAnswer && userAnswer.toLowerCase().trim() === correctAnswer.toLowerCase().trim()) {
+              correctAnswers++
+            }
+          }
+        }
+      } else {
+        // Boshqa savol turlari uchun oddiy hisoblash
+        totalPossibleAnswers++
+        const userAnswer = answers[question.id]
+        if (userAnswer && userAnswer === question.correctAnswer) {
+          correctAnswers++
+        }
       }
     })
     
-    return Math.round((correctAnswers / totalQuestions) * 100)
+    return totalPossibleAnswers > 0 ? Math.round((correctAnswers / totalPossibleAnswers) * 100) : 0
   }
 
   // Reset exam
@@ -548,60 +740,58 @@ export default function StudentExamPage() {
               {/* Header with Instructions */}
               <div className="bg-gray-100 p-4 border-b border-gray-300">
                 <p className="text-sm font-semibold text-gray-800">
-                  Write <span className="text-red-600 font-bold">NO MORE THAN TWO WORDS AND/OR A NUMBER</span> for each answer.
+                  {question.instructions || "Complete the notes below. Choose ONE WORD ONLY from the passage for each answer. Write your answers in boxes 1-5 on your answer sheet."}
                 </p>
               </div>
               
               <div className="p-6">
                 <div className="text-center mb-6">
-                  <h2 className="text-xl font-bold text-gray-900 mb-2">Complete the sentences</h2>
+                  <h2 className="text-xl font-bold text-gray-900 mb-2">
+                    {question.questionTitle || "Complete the notes"}
+                  </h2>
                 </div>
                 
-                {/* Sentence Completion */}
-                <div className="space-y-4">
-                  <div className="border border-gray-300 p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-6 h-6 bg-blue-600 text-white rounded flex items-center justify-center">
-                        <span className="text-xs font-semibold">1</span>
-                      </div>
-                      <h3 className="text-sm font-semibold text-gray-900">Sentence Completion</h3>
+                {/* Notes with gaps */}
+                <div className="border border-gray-300 p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-6 h-6 bg-blue-600 text-white rounded flex items-center justify-center">
+                      <span className="text-xs font-semibold">1</span>
                     </div>
-                    
-                    <div className="mb-4">
-                      <p className="text-sm text-gray-800 leading-relaxed mb-3">
-                        {question.question.replace(/___/g, '_____').split('_____').map((part, index, array) => (
-                          <React.Fragment key={index}>
-                            {part}
-                            {index < array.length - 1 && (
-                              <span className="inline-block w-20 h-6 border border-gray-400 bg-gray-50 rounded mx-1 align-middle"></span>
-                            )}
-                          </React.Fragment>
-                        ))}
-                      </p>
-                    </div>
-                    
-                    <div className="space-y-3">
-                      <div>
-                        <Label className="text-xs font-semibold text-gray-700 mb-1 block">
-                          Your answer:
-                        </Label>
-                        <Input
-                          value={answers[question.id] || ""}
-                          onChange={(e) => handleAnswerChange(question.id, e.target.value)}
-                          placeholder="Type your answer here..."
-                          className="w-full h-8 text-sm border border-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-200 rounded"
-                        />
-                      </div>
-                      
-                      {question.wordLimit && (
-                        <div className="flex items-center gap-2 p-2 bg-amber-50 rounded border border-amber-200">
-                          <AlertTriangle className="h-3 w-3 text-amber-600" />
-                          <p className="text-xs font-medium text-amber-800">
-                            NO MORE THAN {question.wordLimit} WORD{question.wordLimit > 1 ? 'S' : ''}
-                          </p>
+                    <h3 className="text-sm font-semibold text-gray-900">Notes Completion</h3>
+                  </div>
+                  
+                  <div className="mb-4">
+                    <pre className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap font-mono">
+                      {question.notesText || question.question}
+                    </pre>
+                  </div>
+                  
+                  {/* Answer boxes */}
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {[1, 2, 3, 4, 5].map((gapNumber) => (
+                        <div key={gapNumber} className="flex items-center gap-2">
+                          <div className="w-6 h-6 bg-red-600 text-white rounded flex items-center justify-center flex-shrink-0">
+                            <span className="text-xs font-semibold">{gapNumber}</span>
+                          </div>
+                          <Input
+                            value={answers[`${question.id}_gap${gapNumber}`] || ""}
+                            onChange={(e) => handleAnswerChange(`${question.id}_gap${gapNumber}`, e.target.value)}
+                            placeholder="Type your answer..."
+                            className="w-full h-8 text-sm border border-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-200 rounded"
+                          />
                         </div>
-                      )}
+                      ))}
                     </div>
+                    
+                    {question.wordLimit && (
+                      <div className="flex items-center gap-2 p-2 bg-amber-50 rounded border border-amber-200">
+                        <AlertTriangle className="h-3 w-3 text-amber-600" />
+                        <p className="text-xs font-medium text-amber-800">
+                          NO MORE THAN {question.wordLimit} WORD{question.wordLimit > 1 ? 'S' : ''}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -982,6 +1172,36 @@ export default function StudentExamPage() {
                 </Badge>
               </div>
             )}
+            
+            {/* Backend Status */}
+            <div className="mt-4 flex items-center justify-center gap-2">
+              {loadingTests ? (
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Loading tests...</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  {backendConnected ? (
+                    <div className="flex items-center gap-2 text-sm text-green-600">
+                      <Wifi className="h-4 w-4" />
+                      <span>Connected to backend</span>
+                      <Badge variant="outline" className="text-green-600 border-green-300">
+                        {availableTests.length} tests available
+                      </Badge>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm text-orange-600">
+                      <WifiOff className="h-4 w-4" />
+                      <span>Using offline mode</span>
+                      <Badge variant="outline" className="text-orange-600 border-orange-300">
+                        Demo tests
+                      </Badge>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </motion.div>
 
           {/* Section Selection */}
@@ -991,49 +1211,68 @@ export default function StudentExamPage() {
             transition={{ delay: 0.2 }}
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
           >
-            {ieltsSections.map((section, index) => (
-              <motion.div
-                key={section.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 + index * 0.1 }}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <Card className={`rounded-3xl border-2 cursor-pointer transition-all duration-300 hover:shadow-lg ${section.bgColor}`}>
-                  <CardHeader className="text-center">
-                    <div className={`mx-auto w-16 h-16 rounded-full ${section.bgColor} flex items-center justify-center mb-4`}>
-                      <div className={section.color}>
-                        {section.icon}
+            {ieltsSections.map((section, index) => {
+              // Find backend test for this section
+              const backendTest = availableTests.find(test => test.type === section.id)
+              
+              return (
+                <motion.div
+                  key={section.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 + index * 0.1 }}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <Card className={`rounded-3xl border-2 cursor-pointer transition-all duration-300 hover:shadow-lg ${section.bgColor}`}>
+                    <CardHeader className="text-center">
+                      <div className={`mx-auto w-16 h-16 rounded-full ${section.bgColor} flex items-center justify-center mb-4`}>
+                        <div className={section.color}>
+                          {section.icon}
+                        </div>
                       </div>
-                    </div>
-                    <CardTitle className="text-xl">{section.title}</CardTitle>
-                    <CardDescription className="text-sm">
-                      {section.description}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div className="text-center p-2 bg-white/50 rounded">
-                        <Clock className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
-                        <p className="font-medium">{section.duration} min</p>
+                      <CardTitle className="text-xl">{section.title}</CardTitle>
+                      <CardDescription className="text-sm">
+                        {section.description}
+                      </CardDescription>
+                      
+                      {/* Backend Test Info */}
+                      {backendTest && (
+                        <div className="mt-2">
+                          <Badge variant="outline" className="text-xs text-green-600 border-green-300">
+                            <Database className="h-3 w-3 mr-1" />
+                            {backendTest.title}
+                          </Badge>
+                        </div>
+                      )}
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div className="text-center p-2 bg-white/50 rounded">
+                          <Clock className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
+                          <p className="font-medium">
+                            {backendTest ? backendTest.timeLimit : section.duration} min
+                          </p>
+                        </div>
+                        <div className="text-center p-2 bg-white/50 rounded">
+                          <Target className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
+                          <p className="font-medium">
+                            {backendTest ? backendTest.questions?.length || 0 : section.questions} savol
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-center p-2 bg-white/50 rounded">
-                        <Target className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
-                        <p className="font-medium">{section.questions} savol</p>
-                      </div>
-                    </div>
-                     
-                    <Button 
-                      className="w-full" 
-                      onClick={() => startExam(section)}
-                    >
-                      Boshlash
-                    </Button>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
+                       
+                      <Button 
+                        className="w-full" 
+                        onClick={() => startExam(section)}
+                      >
+                        {backendTest ? "Start Real Test" : "Start Demo"}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )
+            })}
           </motion.div>
         </div>
       </div>
@@ -1414,6 +1653,66 @@ export default function StudentExamPage() {
                     <p className="text-sm text-muted-foreground">Correct Answers</p>
                   </div>
                 </div>
+
+                {/* Detailed Results for Sentence Completion */}
+                {examData?.questions?.some((q: any) => q.type === "Sentence Completion") && (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Detailed Results</h3>
+                    {examData.questions.map((question: any) => {
+                      if (question.type === "Sentence Completion") {
+                        return (
+                          <div key={question.id} className="border rounded-lg p-4 bg-gray-50">
+                            <h4 className="font-semibold text-gray-900 mb-3">
+                              {question.questionTitle || "Sentence Completion"}
+                            </h4>
+                            <div className="space-y-2">
+                              {[1, 2, 3, 4, 5].map((gapNumber) => {
+                                const gapKey = `${question.id}_gap${gapNumber}`
+                                const userAnswer = answers[gapKey]
+                                const correctAnswer = question[`gap${gapNumber}`]
+                                
+                                if (!correctAnswer) return null
+                                
+                                const isCorrect = userAnswer && 
+                                  userAnswer.toLowerCase().trim() === correctAnswer.toLowerCase().trim()
+                                
+                                return (
+                                  <div key={gapNumber} className="flex items-center gap-3">
+                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                                      isCorrect ? 'bg-green-500' : 'bg-red-500'
+                                    }`}>
+                                      <span className="text-white text-xs font-semibold">{gapNumber}</span>
+                                    </div>
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm font-medium">Your answer:</span>
+                                        <span className={`text-sm ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>
+                                          {userAnswer || 'No answer'}
+                                        </span>
+                                      </div>
+                                      {!isCorrect && (
+                                        <div className="flex items-center gap-2 mt-1">
+                                          <span className="text-sm font-medium">Correct:</span>
+                                          <span className="text-sm text-green-600">{correctAnswer}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                    {isCorrect ? (
+                                      <CheckCircle className="h-4 w-4 text-green-500" />
+                                    ) : (
+                                      <XCircle className="h-4 w-4 text-red-500" />
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )
+                      }
+                      return null
+                    })}
+                  </div>
+                )}
 
                 {/* Time Spent */}
                 <div className="text-center p-4 bg-orange-50 rounded-lg">

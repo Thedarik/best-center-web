@@ -7,28 +7,19 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
 import { Progress } from "@/components/ui/progress"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Slider } from "@/components/ui/slider"
+import { AlertTriangle, CheckCircle, XCircle } from "lucide-react"
 import {
   ArrowLeft,
   Clock,
   Volume2,
-  CheckCircle,
-  Eye,
   Play,
   Pause,
   RotateCcw,
-  FileText,
-  User,
-  Target,
   Award,
-  AlertTriangle,
+  Eye,
   SkipBack,
   SkipForward,
-  VolumeX,
-  Headphones,
 } from "lucide-react"
 
 // Types
@@ -42,6 +33,9 @@ interface ListeningQuestion {
   alternativeAnswers?: string[]
   startTime?: number
   endTime?: number
+  instructions?: string
+  questionTitle?: string
+  notesText?: string
 }
 
 interface ListeningSection {
@@ -77,11 +71,10 @@ export default function ListeningTestViewer({ testData, onBack, mode = "preview"
   const [currentSection, setCurrentSection] = useState(0)
   const [currentQuestion, setCurrentQuestion] = useState(0)
   const [answers, setAnswers] = useState<{ [key: string]: string }>({})
-  const [timeLeft, setTimeLeft] = useState(testData.timeLimit * 60) // seconds
+  const [timeLeft, setTimeLeft] = useState(testData.timeLimit * 60)
   const [isRunning, setIsRunning] = useState(false)
-  const [showResults, setShowResults] = useState(false)
   const [score, setScore] = useState(0)
-  const [view, setView] = useState<"overview" | "sections" | "questions" | "results">("overview")
+  const [view, setView] = useState<"overview" | "test" | "results">("overview")
 
   // Audio controls
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -89,7 +82,6 @@ export default function ListeningTestViewer({ testData, onBack, mode = "preview"
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [volume, setVolume] = useState(0.8)
-  const [playbackRate, setPlaybackRate] = useState(1)
 
   // Timer effect
   useEffect(() => {
@@ -129,207 +121,212 @@ export default function ListeningTestViewer({ testData, onBack, mode = "preview"
     }
   }, [currentSection])
 
-  // Format time
   const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60)
-    const remainingSeconds = Math.floor(seconds % 60)
-    return `${minutes.toString().padStart(2, "0")}:${remainingSeconds.toString().padStart(2, "0")}`
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, "0")}`
   }
 
-  // Audio controls
   const togglePlayPause = () => {
-    const audio = audioRef.current
-    if (!audio) return
-
-    if (isPlaying) {
-      audio.pause()
-    } else {
-      audio.play()
-    }
-    setIsPlaying(!isPlaying)
-  }
-
-  const seekTo = (time: number) => {
-    const audio = audioRef.current
-    if (audio) {
-      audio.currentTime = time
-      setCurrentTime(time)
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause()
+      } else {
+        audioRef.current.play()
+      }
+      setIsPlaying(!isPlaying)
     }
   }
 
-  const changeVolume = (newVolume: number[]) => {
-    const audio = audioRef.current
-    if (audio) {
-      audio.volume = newVolume[0]
-      setVolume(newVolume[0])
-    }
-  }
-
-  const changePlaybackRate = (rate: number) => {
-    const audio = audioRef.current
-    if (audio) {
-      audio.playbackRate = rate
-      setPlaybackRate(rate)
-    }
-  }
-
-  // Start test
   const startTest = () => {
+    setView("test")
     setIsRunning(true)
-    setView("sections")
+    if (audioRef.current) {
+      audioRef.current.play()
+      setIsPlaying(true)
+    }
   }
 
-  // Handle answer change
   const handleAnswerChange = (questionIndex: number, answer: string) => {
-    const key = `${currentSection}-${questionIndex}`
-    setAnswers((prev) => ({
+    setAnswers(prev => ({
       ...prev,
-      [key]: answer,
+      [questionIndex]: answer
     }))
   }
 
-  // Calculate score
   const calculateScore = () => {
+    if (!testData.sections_data || testData.sections_data.length === 0) return 0
+    
     let correctAnswers = 0
     let totalQuestions = 0
-
+    
     testData.sections_data.forEach((section, sectionIndex) => {
       section.questions.forEach((question, questionIndex) => {
-        totalQuestions++
-        const key = `${sectionIndex}-${questionIndex}`
-        const userAnswer = answers[key]?.toLowerCase().trim()
-
-        if (question.type === "Multiple Choice") {
-          if (Number.parseInt(userAnswer) === question.correct) {
-            correctAnswers++
+        const answerKey = `${sectionIndex}_${questionIndex}`
+        const userAnswer = answers[answerKey]
+        
+        if (question.type === "Sentence Completion") {
+          // Sentence Completion uchun har bir gap alohida hisoblanadi
+          for (let gapNumber = 1; gapNumber <= 5; gapNumber++) {
+            const gapKey = `${answerKey}_gap${gapNumber}`
+            const userGapAnswer = answers[gapKey]
+            const correctGapAnswer = question[`gap${gapNumber}`]
+            
+            if (correctGapAnswer) {
+              totalQuestions++
+              if (userGapAnswer && userGapAnswer.toLowerCase().trim() === correctGapAnswer.toLowerCase().trim()) {
+                correctAnswers++
+              }
+            }
           }
-        } else if (
-          ["Form Completion", "Note Completion", "Table Completion", "Sentence Completion"].includes(question.type)
-        ) {
-          const correctAnswer = question.correctAnswer?.toLowerCase().trim()
-          const alternativeAnswers = question.alternativeAnswers?.map((ans) => ans.toLowerCase().trim()) || []
-
-          if (correctAnswer === userAnswer || alternativeAnswers.includes(userAnswer)) {
-            correctAnswers++
-          }
-        } else if (question.type === "Short Answer Questions") {
-          if (userAnswer === question.correctAnswer?.toLowerCase().trim()) {
+        } else {
+          totalQuestions++
+          if (userAnswer && userAnswer === question.correctAnswer) {
             correctAnswers++
           }
         }
       })
     })
-
-    return Math.round((correctAnswers / totalQuestions) * 100)
+    
+    return totalQuestions > 0 ? Math.round((correctAnswers / totalQuestions) * 100) : 0
   }
 
-  // Submit test
   const handleSubmitTest = () => {
+    setIsRunning(false)
     const finalScore = calculateScore()
     setScore(finalScore)
-    setShowResults(true)
     setView("results")
-    setIsRunning(false)
   }
 
-  // Reset test
   const resetTest = () => {
+    setCurrentSection(0)
+    setCurrentQuestion(0)
     setAnswers({})
     setTimeLeft(testData.timeLimit * 60)
     setIsRunning(false)
-    setShowResults(false)
     setScore(0)
-    setCurrentSection(0)
-    setCurrentQuestion(0)
     setView("overview")
-    setIsPlaying(false)
-    setCurrentTime(0)
   }
 
-  // Render question based on type
   const renderQuestion = (question: ListeningQuestion, questionIndex: number) => {
-    const key = `${currentSection}-${questionIndex}`
-    const currentAnswer = answers[key] || ""
+    const answerKey = `${currentSection}_${questionIndex}`
 
     switch (question.type) {
       case "Multiple Choice":
         return (
           <div className="space-y-4">
-            <p className="font-medium">{question.question}</p>
-            <RadioGroup value={currentAnswer} onValueChange={(value) => handleAnswerChange(questionIndex, value)}>
-              {question.options?.map((option, optIndex) => (
-                <div key={optIndex} className="flex items-center space-x-2">
-                  <RadioGroupItem value={optIndex.toString()} id={`q${questionIndex}-${optIndex}`} />
-                  <Label htmlFor={`q${questionIndex}-${optIndex}`} className="flex-1">
-                    {String.fromCharCode(65 + optIndex)}. {option}
-                  </Label>
+            <div className="bg-white border border-gray-300 rounded-lg p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-6 h-6 bg-blue-600 text-white rounded flex items-center justify-center">
+                  <span className="text-xs font-semibold">{questionIndex + 1}</span>
                 </div>
-              ))}
-            </RadioGroup>
+                <h3 className="text-lg font-semibold">Multiple Choice</h3>
+              </div>
+              
+              <div className="mb-4">
+                <p className="text-gray-800 leading-relaxed">{question.question}</p>
+              </div>
+              
+              <RadioGroup
+                value={answers[answerKey] || ""}
+                onValueChange={(value) => handleAnswerChange(questionIndex, value)}
+              >
+                <div className="space-y-3">
+                  {question.options?.map((option, index) => (
+                    <div key={index} className="flex items-center space-x-3">
+                      <RadioGroupItem value={option} id={`${answerKey}_${index}`} />
+                      <Label htmlFor={`${answerKey}_${index}`} className="text-sm">
+                        {String.fromCharCode(65 + index)}. {option}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </RadioGroup>
+            </div>
           </div>
         )
 
-      case "Form Completion":
-      case "Note Completion":
-      case "Table Completion":
       case "Sentence Completion":
         return (
           <div className="space-y-4">
-            <p className="font-medium">{question.question}</p>
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-muted-foreground mb-2">
-                Use NO MORE THAN {question.wordLimit} WORD(S) from the recording
-              </p>
-              {question.startTime !== undefined && question.endTime !== undefined && (
-                <div className="flex items-center gap-2 text-xs text-blue-600 mb-2">
-                  <Clock className="h-3 w-3" />
-                  <span>
-                    Listen from {formatTime(question.startTime)} to {formatTime(question.endTime)}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => seekTo(question.startTime || 0)}
-                    className="h-6 px-2 text-xs"
-                  >
-                    Go to
-                  </Button>
+            <div className="bg-white border border-gray-300 rounded-lg p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-6 h-6 bg-blue-600 text-white rounded flex items-center justify-center">
+                  <span className="text-xs font-semibold">{questionIndex + 1}</span>
+                </div>
+                <h3 className="text-lg font-semibold">Notes Completion</h3>
+              </div>
+              
+              {question.instructions && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded">
+                  <p className="text-sm text-red-800">{question.instructions}</p>
                 </div>
               )}
+              
+              {question.questionTitle && (
+                <h4 className="text-lg font-bold text-blue-600 mb-4">{question.questionTitle}</h4>
+              )}
+              
+              {question.notesText && (
+                <div className="mb-6 p-4 bg-gray-50 border rounded">
+                  <pre className="text-sm text-gray-800 whitespace-pre-wrap font-mono">
+                    {question.notesText}
+                  </pre>
+                </div>
+              )}
+              
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[1, 2, 3, 4, 5].map((gapNumber) => (
+                    <div key={gapNumber} className="flex items-center gap-2">
+                      <div className="w-6 h-6 bg-red-600 text-white rounded flex items-center justify-center flex-shrink-0">
+                        <span className="text-xs font-semibold">{gapNumber}</span>
+                      </div>
+                      <Input
+                        value={answers[`${answerKey}_gap${gapNumber}`] || ""}
+                        onChange={(e) => handleAnswerChange(`${questionIndex}_gap${gapNumber}`, e.target.value)}
+                        placeholder="Type your answer..."
+                        className="flex-1"
+                      />
+                    </div>
+                  ))}
+                </div>
+                
+                {question.wordLimit && (
+                  <div className="flex items-center gap-2 p-2 bg-amber-50 rounded border border-amber-200">
+                    <AlertTriangle className="h-3 w-3 text-amber-600" />
+                    <p className="text-xs font-medium text-amber-800">
+                      NO MORE THAN {question.wordLimit} WORD{question.wordLimit > 1 ? 'S' : ''}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
-            <Input
-              placeholder="Your answer..."
-              value={currentAnswer}
-              onChange={(e) => handleAnswerChange(questionIndex, e.target.value)}
-              className="w-full"
-            />
-          </div>
-        )
-
-      case "Short Answer Questions":
-        return (
-          <div className="space-y-4">
-            <p className="font-medium">{question.question}</p>
-            <p className="text-sm text-muted-foreground">
-              Use NO MORE THAN {question.wordLimit} WORD(S) from the recording
-            </p>
-            <Input
-              placeholder="Your answer..."
-              value={currentAnswer}
-              onChange={(e) => handleAnswerChange(questionIndex, e.target.value)}
-              className="w-full"
-            />
           </div>
         )
 
       default:
         return (
           <div className="space-y-4">
-            <p className="font-medium">{question.question}</p>
-            <Alert>
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>Bu savol turi hali qo'llab-quvvatlanmaydi: {question.type}</AlertDescription>
-            </Alert>
+            <div className="bg-white border border-gray-300 rounded-lg p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-6 h-6 bg-blue-600 text-white rounded flex items-center justify-center">
+                  <span className="text-xs font-semibold">{questionIndex + 1}</span>
+                </div>
+                <h3 className="text-lg font-semibold">{question.type}</h3>
+              </div>
+              
+              <div className="mb-4">
+                <p className="text-gray-800 leading-relaxed">{question.question}</p>
+              </div>
+              
+              <Input
+                value={answers[answerKey] || ""}
+                onChange={(e) => handleAnswerChange(questionIndex, e.target.value)}
+                placeholder="Type your answer..."
+                className="w-full"
+              />
+            </div>
           </div>
         )
     }
@@ -339,113 +336,83 @@ export default function ListeningTestViewer({ testData, onBack, mode = "preview"
   if (view === "overview") {
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between">
           <Button variant="outline" onClick={onBack}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Orqaga
           </Button>
+          <Badge variant="outline" className="text-sm">
+            {mode === "exam" ? "Exam Mode" : mode === "practice" ? "Practice Mode" : "Preview Mode"}
+          </Badge>
         </div>
 
         <Card className="rounded-3xl border-2">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-2xl mb-2 flex items-center gap-2">
-                  <Headphones className="h-8 w-8 text-blue-600" />
-                  {testData.title}
-                </CardTitle>
-                <div className="flex items-center gap-2 mb-2">
-                  <Badge variant="outline">{testData.type}</Badge>
-                  <Badge variant="secondary">{testData.level}</Badge>
-                  <Badge className="bg-green-100 text-green-800">{testData.status}</Badge>
-                </div>
-                <CardDescription>
-                  IELTS Listening test - {testData.sections} ta bo'lim, {testData.questions} ta savol
-                </CardDescription>
-              </div>
-            </div>
+          <CardHeader className="text-center">
+            <CardTitle className="text-3xl">{testData.title}</CardTitle>
+            <CardDescription>
+              {testData.type} • {testData.level} • {testData.sections} sections • {testData.questions} questions
+            </CardDescription>
           </CardHeader>
-
+          
           <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Test Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="text-center p-4 bg-blue-50 rounded-lg">
-                <Volume2 className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-                <p className="text-2xl font-bold text-blue-600">{testData.sections}</p>
-                <p className="text-sm text-muted-foreground">Bo'limlar</p>
+                <Clock className="h-8 w-8 text-blue-600 mx-auto mb-2" />
+                <p className="text-2xl font-bold text-blue-600">{formatTime(testData.timeLimit * 60)}</p>
+                <p className="text-sm text-muted-foreground">Time Limit</p>
               </div>
+              
               <div className="text-center p-4 bg-green-50 rounded-lg">
-                <Target className="h-8 w-8 text-green-600 mx-auto mb-2" />
-                <p className="text-2xl font-bold text-green-600">{testData.questions}</p>
-                <p className="text-sm text-muted-foreground">Savollar</p>
+                <p className="text-2xl font-bold text-green-600">{testData.sections}</p>
+                <p className="text-sm text-muted-foreground">Sections</p>
               </div>
-              <div className="text-center p-4 bg-orange-50 rounded-lg">
-                <Clock className="h-8 w-8 text-orange-600 mx-auto mb-2" />
-                <p className="text-2xl font-bold text-orange-600">{testData.timeLimit}</p>
-                <p className="text-sm text-muted-foreground">Daqiqa</p>
-              </div>
+              
               <div className="text-center p-4 bg-purple-50 rounded-lg">
-                <User className="h-8 w-8 text-purple-600 mx-auto mb-2" />
-                <p className="text-2xl font-bold text-purple-600">{testData.attempts}</p>
-                <p className="text-sm text-muted-foreground">Urinishlar</p>
+                <p className="text-2xl font-bold text-purple-600">{testData.questions}</p>
+                <p className="text-sm text-muted-foreground">Questions</p>
+              </div>
+              
+              <div className="text-center p-4 bg-orange-50 rounded-lg">
+                <p className="text-2xl font-bold text-orange-600">{testData.attempts}</p>
+                <p className="text-sm text-muted-foreground">Attempts</p>
               </div>
             </div>
 
-            <Separator />
-
-            <div>
-              <h3 className="text-lg font-semibold mb-4">Bo'limlar ro'yxati:</h3>
-              <div className="space-y-3">
-                {testData.sections_data.map((section, index) => (
-                  <Card key={index} className="rounded-lg">
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-medium">
-                            {index + 1}. {section.title}
-                          </h4>
-                          <p className="text-sm text-muted-foreground">{section.questions.length} ta savol</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Volume2 className="h-3 w-3 text-blue-600" />
-                            <span className="text-xs text-muted-foreground">Audio mavjud</span>
-                          </div>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setCurrentSection(index)
-                            setView("sections")
-                          }}
-                        >
-                          <Eye className="h-4 w-4 mr-2" />
-                          Ko'rish
-                        </Button>
+            {/* Audio Player */}
+            {testData.sections_data && testData.sections_data.length > 0 && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Audio Preview</h3>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <audio ref={audioRef} src={testData.sections_data[0].audioUrl} />
+                  <div className="flex items-center gap-4">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={togglePlayPause}
+                      className="w-12 h-12 rounded-full"
+                    >
+                      {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                    </Button>
+                    
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
+                        <span>{formatTime(currentTime)}</span>
+                        <span>{formatTime(duration)}</span>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      <Progress value={(currentTime / duration) * 100} className="h-2" />
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
 
-            <Separator />
-
-            <div className="flex gap-4">
-              <Button onClick={() => setView("sections")} variant="outline" className="flex-1">
-                <Eye className="h-4 w-4 mr-2" />
-                Bo'limlarni Ko'rish
+            {/* Start Test Button */}
+            <div className="text-center">
+              <Button onClick={startTest} size="lg" className="px-8 py-3">
+                <Play className="h-5 w-5 mr-2" />
+                {mode === "exam" ? "Start Exam" : mode === "practice" ? "Start Practice" : "Start Preview"}
               </Button>
-              {mode === "practice" && (
-                <Button onClick={startTest} className="flex-1">
-                  <Play className="h-4 w-4 mr-2" />
-                  Mashq Qilish
-                </Button>
-              )}
-              {mode === "exam" && (
-                <Button onClick={startTest} className="flex-1">
-                  <Play className="h-4 w-4 mr-2" />
-                  Testni Boshlash
-                </Button>
-              )}
             </div>
           </CardContent>
         </Card>
@@ -453,176 +420,107 @@ export default function ListeningTestViewer({ testData, onBack, mode = "preview"
     )
   }
 
-  // Sections view
-  if (view === "sections") {
-    const section = testData.sections_data[currentSection]
+  // Test view
+  if (view === "test") {
+    const currentSectionData = testData.sections_data?.[currentSection]
+    const currentQuestionData = currentSectionData?.questions?.[currentQuestion]
+
+    if (!currentSectionData || !currentQuestionData) {
+      return (
+        <div className="text-center py-8">
+          <p className="text-muted-foreground">Test ma'lumotlari topilmadi</p>
+        </div>
+      )
+    }
 
     return (
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
+          <Button variant="outline" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Orqaga
+          </Button>
+          
           <div className="flex items-center gap-4">
-            <Button variant="outline" onClick={() => setView("overview")}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Orqaga
-            </Button>
-            <div>
-              <h2 className="text-xl font-bold">{testData.title}</h2>
-              <p className="text-sm text-muted-foreground">
-                Bo'lim {currentSection + 1} / {testData.sections_data.length}
-              </p>
-            </div>
+            {mode === "exam" && (
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-red-600" />
+                <span className="font-semibold text-red-600">{formatTime(timeLeft)}</span>
+              </div>
+            )}
+            
+            <Badge variant="outline">
+              Section {currentSection + 1} of {testData.sections}
+            </Badge>
           </div>
-
-          {(mode === "practice" || mode === "exam") && (
-            <div className="flex items-center gap-4">
-              {mode === "exam" && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-red-50 rounded-lg">
-                  <Clock className="h-4 w-4 text-red-600" />
-                  <span className="font-mono text-red-600">{formatTime(timeLeft)}</span>
-                </div>
-              )}
-              <Button variant={isRunning ? "outline" : "default"} onClick={() => setIsRunning(!isRunning)}>
-                {isRunning ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-              </Button>
-            </div>
-          )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Audio Player */}
-          <Card className="rounded-3xl">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Volume2 className="h-5 w-5" />
-                {section.title}
-              </CardTitle>
-              <CardDescription>Audio player va boshqaruv elementlari</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Audio Element */}
-              <audio
-                ref={audioRef}
-                src={section.audioUrl}
-                onPlay={() => setIsPlaying(true)}
-                onPause={() => setIsPlaying(false)}
-              />
-
-              {/* Main Controls */}
-              <div className="flex items-center justify-center gap-4">
-                <Button variant="outline" size="sm" onClick={() => seekTo(Math.max(0, currentTime - 10))}>
-                  <SkipBack className="h-4 w-4" />
-                </Button>
-
-                <Button size="lg" onClick={togglePlayPause} className="rounded-full w-12 h-12">
-                  {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6" />}
-                </Button>
-
-                <Button variant="outline" size="sm" onClick={() => seekTo(Math.min(duration, currentTime + 10))}>
-                  <SkipForward className="h-4 w-4" />
-                </Button>
+        {/* Audio Player */}
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <audio ref={audioRef} src={currentSectionData.audioUrl} />
+          <div className="flex items-center gap-4">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={togglePlayPause}
+              className="w-12 h-12 rounded-full"
+            >
+              {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+            </Button>
+            
+            <div className="flex-1">
+              <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
+                <span>{formatTime(currentTime)}</span>
+                <span>{formatTime(duration)}</span>
               </div>
+              <Progress value={(currentTime / duration) * 100} className="h-2" />
+            </div>
+          </div>
+        </div>
 
-              {/* Progress Bar */}
-              <div className="space-y-2">
-                <Slider
-                  value={[currentTime]}
-                  max={duration}
-                  step={1}
-                  onValueChange={(value) => seekTo(value[0])}
-                  className="w-full"
-                />
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>{formatTime(currentTime)}</span>
-                  <span>{formatTime(duration)}</span>
-                </div>
-              </div>
-
-              {/* Volume Control */}
-              <div className="flex items-center gap-2">
-                <VolumeX className="h-4 w-4" />
-                <Slider value={[volume]} max={1} step={0.1} onValueChange={changeVolume} className="flex-1" />
-                <Volume2 className="h-4 w-4" />
-              </div>
-
-              {/* Playback Speed */}
-              <div className="flex items-center gap-2">
-                <Label className="text-sm">Tezlik:</Label>
-                <div className="flex gap-1">
-                  {[0.75, 1, 1.25, 1.5].map((rate) => (
-                    <Button
-                      key={rate}
-                      variant={playbackRate === rate ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => changePlaybackRate(rate)}
-                    >
-                      {rate}x
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Transcript (if available) */}
-              {section.transcript && (
-                <div className="mt-4">
-                  <Label className="text-sm font-medium">Transkripsiya:</Label>
-                  <div className="mt-2 p-3 bg-gray-50 rounded text-sm max-h-32 overflow-y-auto">
-                    {section.transcript}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Questions */}
-          <Card className="rounded-3xl">
-            <CardHeader>
-              <CardTitle>Savollar</CardTitle>
-              <CardDescription>{section.questions.length} ta savol</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                {section.questions.map((question, index) => (
-                  <div key={index} className="p-4 border rounded-lg">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Badge variant="outline">{question.type}</Badge>
-                      <span className="text-sm text-muted-foreground">Savol {index + 1}</span>
-                    </div>
-                    {renderQuestion(question, index)}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+        {/* Question */}
+        <div className="space-y-4">
+          {renderQuestion(currentQuestionData, currentQuestion)}
         </div>
 
         {/* Navigation */}
         <div className="flex items-center justify-between">
           <Button
             variant="outline"
-            onClick={() => setCurrentSection(Math.max(0, currentSection - 1))}
-            disabled={currentSection === 0}
+            onClick={() => setCurrentQuestion(Math.max(0, currentQuestion - 1))}
+            disabled={currentQuestion === 0}
           >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Oldingi Bo'lim
+            <SkipBack className="h-4 w-4 mr-2" />
+            Previous
           </Button>
-
+          
           <div className="flex items-center gap-2">
-            {(mode === "practice" || mode === "exam") && (
-              <Button onClick={handleSubmitTest} variant="default">
-                <CheckCircle className="h-4 w-4 mr-2" />
-                Testni Yakunlash
-              </Button>
-            )}
+            <span className="text-sm text-muted-foreground">
+              Question {currentQuestion + 1} of {currentSectionData.questions.length}
+            </span>
           </div>
-
+          
           <Button
-            variant="outline"
-            onClick={() => setCurrentSection(Math.min(testData.sections_data.length - 1, currentSection + 1))}
-            disabled={currentSection === testData.sections_data.length - 1}
+            onClick={() => {
+              if (currentQuestion < currentSectionData.questions.length - 1) {
+                setCurrentQuestion(currentQuestion + 1)
+              } else {
+                handleSubmitTest()
+              }
+            }}
           >
-            Keyingi Bo'lim
-            <ArrowLeft className="h-4 w-4 ml-2 rotate-180" />
+            {currentQuestion < currentSectionData.questions.length - 1 ? (
+              <>
+                Next
+                <SkipForward className="h-4 w-4 ml-2" />
+              </>
+            ) : (
+              <>
+                Submit Test
+                <CheckCircle className="h-4 w-4 ml-2" />
+              </>
+            )}
           </Button>
         </div>
       </div>
@@ -633,8 +531,8 @@ export default function ListeningTestViewer({ testData, onBack, mode = "preview"
   if (view === "results") {
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" onClick={() => setView("overview")}>
+        <div className="flex items-center justify-between">
+          <Button variant="outline" onClick={onBack}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Orqaga
           </Button>
@@ -645,39 +543,32 @@ export default function ListeningTestViewer({ testData, onBack, mode = "preview"
             <div className="mx-auto w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mb-4">
               <Award className="h-10 w-10 text-green-600" />
             </div>
-            <CardTitle className="text-2xl">Test Yakunlandi!</CardTitle>
-            <CardDescription>Sizning natijangiz</CardDescription>
+            <CardTitle className="text-3xl">Test Completed!</CardTitle>
+            <CardDescription>
+              {testData.title} - Results
+            </CardDescription>
           </CardHeader>
-
+          
           <CardContent className="space-y-6">
+            {/* Score Display */}
             <div className="text-center">
               <div className="text-6xl font-bold text-green-600 mb-2">{score}%</div>
               <p className="text-muted-foreground">
-                {testData.questions} savoldan {Math.round((score / 100) * testData.questions)} tasi to'g'ri
+                {testData.questions} questions completed
               </p>
             </div>
 
             <Progress value={score} className="h-3" />
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="text-center p-4 bg-blue-50 rounded-lg">
-                <p className="text-2xl font-bold text-blue-600">{testData.questions}</p>
-                <p className="text-sm text-muted-foreground">Jami Savollar</p>
-              </div>
-              <div className="text-center p-4 bg-green-50 rounded-lg">
-                <p className="text-2xl font-bold text-green-600">{Math.round((score / 100) * testData.questions)}</p>
-                <p className="text-sm text-muted-foreground">To'g'ri Javoblar</p>
-              </div>
-            </div>
-
+            {/* Actions */}
             <div className="flex gap-4">
-              <Button onClick={resetTest} variant="outline" className="flex-1 bg-transparent">
+              <Button onClick={resetTest} variant="outline" className="flex-1">
                 <RotateCcw className="h-4 w-4 mr-2" />
-                Qayta Urinish
+                Try Again
               </Button>
-              <Button onClick={() => setView("overview")} className="flex-1">
-                <FileText className="h-4 w-4 mr-2" />
-                Test Haqida
+              <Button onClick={onBack} className="flex-1">
+                <Eye className="h-4 w-4 mr-2" />
+                Back to List
               </Button>
             </div>
           </CardContent>
