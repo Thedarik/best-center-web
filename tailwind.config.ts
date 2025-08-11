@@ -13,6 +13,9 @@ const config: Config = {
   		colors: {
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
+  			'ielts-dark': '#1a1a1a',
+  			'ielts-red': '#dc2626',
+  			'ielts-text': '#374151',
   			card: {
   				DEFAULT: 'hsl(var(--card))',
   				foreground: 'hsl(var(--card-foreground))'
