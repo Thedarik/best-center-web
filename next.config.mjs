@@ -9,9 +9,7 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  experimental: {
-    optimizeCss: true,
-  },
+
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {

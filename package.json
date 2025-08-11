@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "build:vercel": "next build && next export",
+    "build:vercel": "next build",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
